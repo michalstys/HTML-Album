@@ -221,6 +221,7 @@ async function buildLibrary(files) {
         storyMeta = parsedText;
       } else {
         textEntries.set(relativeBaseKey, parsedText);
+        textEntries.set(relativeFileKey, parsedText);
       }
       continue;
     }
