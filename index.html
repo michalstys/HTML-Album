@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Comic Story Reader</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero" id="hero">
+        <div class="hero__media-layer" id="heroMediaLayer" aria-hidden="true"></div>
+        <div class="hero__overlay"></div>
+        <div class="hero__content">
+          <p class="hero__eyebrow">Comic Story Reader</p>
+          <h1 id="storyTitle">Wybierz katalog z historią</h1>
+          <p class="hero__description" id="storyDescription">
+            Ten widok potraktuje Twoje pliki jak komiksową opowieść: plansze, kadry,
+            szybkie czytanie i wygodne przechodzenie między scenami.
+          </p>
+          <div class="hero__actions">
+            <label class="picker-button" for="folderPicker">Wybierz katalog</label>
+            <input
+              id="folderPicker"
+              type="file"
+              webkitdirectory
+              directory
+              multiple
+              aria-label="Wybierz katalog z plikami"
+            />
+          </div>
+        </div>
+      </header>
+
+      <main class="content">
+        <section class="reader-controls">
+          <div class="reader-controls__group" role="tablist" aria-label="Tryb widoku">
+            <button class="view-toggle is-active" id="gridViewButton" type="button" aria-pressed="true">
+              Plansza
+            </button>
+            <button class="view-toggle" id="readerViewButton" type="button" aria-pressed="false">
+              Czytanie
+            </button>
+          </div>
+          <div class="reader-controls__meta">
+            <p class="reader-controls__label">Kadry</p>
+            <p class="reader-controls__value" id="storyProgressLabel">0</p>
+          </div>
+        </section>
+
+        <section class="gallery-section">
+          <div class="empty-state" id="emptyState">
+            <p>Brak wczytanych materiałów.</p>
+            <p>Dodaj obrazy lub wideo oraz pliki `.txt` o tych samych nazwach.</p>
+          </div>
+
+          <div class="gallery-grid" id="galleryGrid"></div>
+          <div class="reader-flow" id="readerFlow"></div>
+        </section>
+
+        <section class="summary-bar" aria-live="polite">
+          <p id="libraryState">Czekam na katalog</p>
+          <p id="librarySummary">Po wczytaniu pokażę tu podsumowanie historii.</p>
+        </section>
+      </main>
+    </div>
+
+    <dialog class="viewer" id="viewer">
+      <div class="viewer__frame" id="viewerFrame">
+      <button class="viewer__fullscreen" id="toggleFullscreen" aria-label="Pełny ekran" type="button">
+        Pełny ekran
+      </button>
+      <button class="viewer__close" id="closeViewer" aria-label="Zamknij widok">×</button>
+      <div class="viewer__stage">
+        <button class="viewer__arrow viewer__arrow--left" id="prevItem" type="button" aria-label="Poprzednie">
+          &#8249;
+        </button>
+        <button class="viewer__arrow viewer__arrow--right" id="nextItem" type="button" aria-label="Następne">
+          &#8250;
+        </button>
+        <div class="viewer__media" id="viewerMedia" tabindex="-1"></div>
+      </div>
+      <div class="viewer__details">
+        <h3 id="viewerTitle"></h3>
+        <p id="viewerDescription"></p>
+      </div>
+      <div class="viewer__strip" id="viewerStrip"></div>
+      </div>
+    </dialog>
+
+    <template id="cardTemplate">
+      <article class="story-card">
+        <button class="story-card__button" type="button">
+          <div class="story-card__media"></div>
+          <div class="story-card__body">
+            <h3 class="story-card__title"></h3>
+            <p class="story-card__description"></p>
+          </div>
+        </button>
+      </article>
+    </template>
+
+    <template id="readerFrameTemplate">
+      <article class="reader-frame">
+        <button class="reader-frame__button" type="button">
+          <div class="reader-frame__heading">
+            <p class="reader-frame__index"></p>
+            <h3 class="reader-frame__title"></h3>
+          </div>
+          <div class="reader-frame__media"></div>
+          <p class="reader-frame__description"></p>
+        </button>
+      </article>
+    </template>
+
+    <template id="stripItemTemplate">
+      <button class="strip-item" type="button">
+        <div class="strip-item__media"></div>
+        <span class="strip-item__index"></span>
+      </button>
+    </template>
+
+    <script src="script.js"></script>
+  </body>
+</html>
