@@ -33,7 +33,7 @@ const MEDIA_EXTENSIONS = {
 };
 
 const STORY_META_NAMES = new Set(["story", "album", "index"]);
-const HERO_MEDIA_NAMES = new Set(["cover", "hero", "background"]);
+const HERO_MEDIA_NAMES = new Set(["cover", "background"]);
 
 let objectUrls = [];
 let galleryItems = [];
@@ -210,6 +210,7 @@ async function buildLibrary(files) {
   for (const file of files) {
     const extension = getExtension(file.name);
     const relativeBaseKey = getRelativeBaseKey(file);
+    const relativeFileKey = getRelativeFileKey(file);
     const baseName = getBaseName(file.name).toLowerCase();
 
     if (extension === "txt") {
@@ -237,11 +238,12 @@ async function buildLibrary(files) {
       name: getBaseName(file.name),
       filename: file.name,
       relativeBaseKey,
+      relativeFileKey,
       type,
       src: objectUrl,
     };
 
-    if (HERO_MEDIA_NAMES.has(baseName) && !heroMedia) {
+    if (isHeroMediaCandidate(item) && !heroMedia) {
       heroMedia = item;
     } else {
       mediaItems.push(item);
@@ -250,7 +252,8 @@ async function buildLibrary(files) {
 
   galleryItems = mediaItems
     .map((item) => {
-      const text = textEntries.get(item.relativeBaseKey);
+      const text =
+        textEntries.get(item.relativeFileKey) || textEntries.get(item.relativeBaseKey);
       return {
         ...item,
         title: text?.title || prettifyName(item.name),
@@ -258,6 +261,8 @@ async function buildLibrary(files) {
           text?.description ||
           "Brak opisu dla tego kadru. Dodaj plik tekstowy o tej samej nazwie, aby pokazać nagłówek i opis sceny.",
         excerpt: makeExcerpt(text?.description),
+        previewStart: text?.meta?.previewStart ?? 0,
+        previewEnd: text?.meta?.previewEnd ?? null,
       };
     })
     .sort((a, b) => a.filename.localeCompare(b.filename, "pl", { numeric: true }));
@@ -396,6 +401,7 @@ function createMediaElement(item, muted = false) {
     video.loop = muted;
     if (muted) {
       video.autoplay = true;
+      applyVideoPreviewMetadata(video, item);
     }
     return video;
   }
@@ -640,16 +646,103 @@ function parseTextFile(rawText, filename) {
 
   if (!normalized) {
     return {
-      title: prettifyName(getBaseName(filename)),
+      title: prettifyName(getTextTitleBaseName(filename)),
       description: "",
+      meta: {},
     };
   }
 
-  const [firstLine, ...rest] = normalized.split("\n");
+  const { meta, bodyLines } = parseTextMetadata(normalized.split("\n"));
+  const [firstLine, ...rest] = bodyLines;
+  const fallbackTitle = prettifyName(getTextTitleBaseName(filename));
+
   return {
-    title: firstLine.trim() || prettifyName(getBaseName(filename)),
+    title: firstLine?.trim() || fallbackTitle,
     description: rest.join("\n").trim(),
+    meta,
   };
+}
+
+function parseTextMetadata(lines) {
+  const meta = {};
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index].trim();
+
+    if (!line) {
+      index += 1;
+      break;
+    }
+
+    const match = line.match(/^@([a-zA-Z][\w-]*):\s*(.+)$/);
+    if (!match) {
+      break;
+    }
+
+    const [, rawKey, rawValue] = match;
+    const key = rawKey.toLowerCase();
+    const value = rawValue.trim();
+
+    if (key === "previewstart") {
+      const parsed = Number(value.replace(",", "."));
+      if (Number.isFinite(parsed) && parsed >= 0) {
+        meta.previewStart = parsed;
+      }
+    }
+
+    if (key === "previewend") {
+      const parsed = Number(value.replace(",", "."));
+      if (Number.isFinite(parsed) && parsed >= 0) {
+        meta.previewEnd = parsed;
+      }
+    }
+
+    index += 1;
+  }
+
+  return {
+    meta,
+    bodyLines: lines.slice(index),
+  };
+}
+
+function applyVideoPreviewMetadata(video, item) {
+  const desiredStart = Number.isFinite(item.previewStart) ? Math.max(0, item.previewStart) : 0;
+  const desiredEnd = Number.isFinite(item.previewEnd) ? Math.max(0, item.previewEnd) : null;
+
+  const syncPreview = () => {
+    const duration = Number.isFinite(video.duration) ? video.duration : null;
+    const start = duration === null ? desiredStart : Math.min(desiredStart, Math.max(duration - 0.1, 0));
+    const end =
+      duration === null || desiredEnd === null ? desiredEnd : Math.min(desiredEnd, duration);
+
+    if (start > 0 && Math.abs(video.currentTime - start) > 0.2) {
+      video.currentTime = start;
+    }
+
+    if (end !== null && end > start) {
+      video.loop = false;
+      video.addEventListener("timeupdate", () => {
+        if (video.currentTime >= end) {
+          video.currentTime = start;
+          const playPromise = video.play();
+          if (playPromise?.catch) {
+            playPromise.catch(() => {});
+          }
+        }
+      });
+      return;
+    }
+
+    video.loop = true;
+  };
+
+  if (video.readyState >= 1) {
+    syncPreview();
+  } else {
+    video.addEventListener("loadedmetadata", syncPreview, { once: true });
+  }
 }
 
 function getMediaType(extension) {
@@ -673,9 +766,34 @@ function getBaseName(filename) {
   return filename.replace(/\.[^.]+$/, "");
 }
 
+function getTextTitleBaseName(filename) {
+  const withoutTxt = filename.replace(/\.txt$/i, "");
+  const extension = getExtension(withoutTxt);
+
+  if (MEDIA_EXTENSIONS.image.has(extension) || MEDIA_EXTENSIONS.video.has(extension)) {
+    return getBaseName(withoutTxt);
+  }
+
+  return withoutTxt;
+}
+
+function isHeroMediaCandidate(item) {
+  const normalizedName = item.name.toLowerCase();
+
+  if (item.type === "image" && normalizedName.includes("hero")) {
+    return true;
+  }
+
+  return HERO_MEDIA_NAMES.has(normalizedName);
+}
+
 function getRelativeBaseKey(file) {
   const relativePath = (file.webkitRelativePath || file.name).replace(/\\/g, "/");
   return relativePath.replace(/\.[^.]+$/, "").toLowerCase();
+}
+
+function getRelativeFileKey(file) {
+  return (file.webkitRelativePath || file.name).replace(/\\/g, "/").toLowerCase();
 }
 
 function makeExcerpt(text = "") {
