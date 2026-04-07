@@ -211,6 +211,7 @@ async function buildLibrary(files) {
     const extension = getExtension(file.name);
     const relativeBaseKey = getRelativeBaseKey(file);
     const relativeFileKey = getRelativeFileKey(file);
+    const textLookupKeys = getTextLookupKeys(file);
     const baseName = getBaseName(file.name).toLowerCase();
 
     if (extension === "txt") {
@@ -220,8 +221,7 @@ async function buildLibrary(files) {
       if (STORY_META_NAMES.has(baseName)) {
         storyMeta = parsedText;
       } else {
-        textEntries.set(relativeBaseKey, parsedText);
-        textEntries.set(relativeFileKey, parsedText);
+        textLookupKeys.forEach((key) => textEntries.set(key, parsedText));
       }
       continue;
     }
@@ -253,8 +253,7 @@ async function buildLibrary(files) {
 
   galleryItems = mediaItems
     .map((item) => {
-      const text =
-        textEntries.get(item.relativeFileKey) || textEntries.get(item.relativeBaseKey);
+      const text = getTextEntryForMedia(textEntries, item);
       return {
         ...item,
         title: text?.title || prettifyName(item.name),
@@ -795,6 +794,37 @@ function getRelativeBaseKey(file) {
 
 function getRelativeFileKey(file) {
   return (file.webkitRelativePath || file.name).replace(/\\/g, "/").toLowerCase();
+}
+
+function getTextLookupKeys(file) {
+  const normalizedPath = getRelativeFileKey(file);
+
+  if (!normalizedPath.endsWith(".txt")) {
+    return [normalizedPath, getRelativeBaseKey(file)];
+  }
+
+  const withoutTxt = normalizedPath.slice(0, -4);
+  const keys = new Set([withoutTxt]);
+  const mediaExtension = getExtension(withoutTxt);
+
+  if (MEDIA_EXTENSIONS.image.has(mediaExtension) || MEDIA_EXTENSIONS.video.has(mediaExtension)) {
+    keys.add(withoutTxt.replace(/\.[^.]+$/, ""));
+  }
+
+  return [...keys];
+}
+
+function getTextEntryForMedia(textEntries, item) {
+  const keys = [item.relativeFileKey, item.relativeBaseKey];
+
+  for (const key of keys) {
+    const entry = textEntries.get(key);
+    if (entry) {
+      return entry;
+    }
+  }
+
+  return null;
 }
 
 function makeExcerpt(text = "") {
